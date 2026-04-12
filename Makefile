@@ -14,11 +14,9 @@ AS      = cc
 
 # -O0:           Mandatory. Optimizations destroy hand-crafted stacks.
 # -g3:           Maximum debug info for GDB/LLDB.
-# -mno-red-zone: Prevents compiler from using the 128-byte red zone
-#                below RSP, which our context switch would corrupt.
 # -Wall -Wextra: Catch common mistakes early.
-CFLAGS  = -g3 -O0 -mno-red-zone -Wall -Wextra -Iinclude
-ASFLAGS = -g3 -mno-red-zone
+CFLAGS  = -g3 -O0 -Wall -Wextra -Iinclude
+ASFLAGS = -g3
 
 # Uncomment to enable sanitizers (may conflict with custom stacks;
 # see note in Phase 1 of the roadmap):
