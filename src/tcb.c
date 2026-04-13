@@ -28,6 +28,14 @@ void tcb_trampoline(void)
 
 tcb_t *tcb_create(void (*func)(void))
 {
+    // NOTE: TCB is a structure that stores: 
+    // - Thread context structure with relevenat register, when the context switch occures these
+    // values are loaded to physical registers of CPU that allow for thread to resume.
+    // - When Thread is not in Running state the Thread registers will be written to memory
+    // and this mem pointer is stored in TCB
+    // - TCB stores other important elements like ThreadId, Thread Memory, Kernel Stack, Parent ID
+    // and other important metadata about Thread that allows it to be scheduled and descheduled.
+    
     /*
      * TODO:
      *  1. Allocate a tcb_t (malloc is fine for the struct itself).
@@ -70,6 +78,8 @@ tcb_t *tcb_create(void (*func)(void))
 
 void tcb_destroy(tcb_t *t)
 {
+    // NOTE: A mechanism used by OS to forcefully delete a Thread Control Block
+
     /*
      * TODO:
      *  1. munmap(t->stack_base, t->stack_size) to free the stack.
