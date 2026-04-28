@@ -6,11 +6,11 @@
  * before any TCB or scheduler code exists.
  */
 
-#include "context.h"
+#include "../include/context.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
 
 #define STACK_SIZE 8192
 #define ITERATIONS 10000
@@ -26,24 +26,22 @@ static void *sp_main = NULL;
 static int counter_A = 0;
 static int counter_B = 0;
 
-static void func_A(void)
-{
-    for (;;) {
-        counter_A++;
-        if (counter_A >= ITERATIONS) {
-            /* Switch back to main to exit cleanly. */
-            switch_context(&sp_A, sp_main);
-        }
-        switch_context(&sp_A, sp_B);
+static void func_A(void) {
+  for (;;) {
+    counter_A++;
+    if (counter_A >= ITERATIONS) {
+      /* Switch back to main to exit cleanly. */
+      switch_context(&sp_A, sp_main);
     }
+    switch_context(&sp_A, sp_B);
+  }
 }
 
-static void func_B(void)
-{
-    for (;;) {
-        counter_B++;
-        switch_context(&sp_B, sp_A);
-    }
+static void func_B(void) {
+  for (;;) {
+    counter_B++;
+    switch_context(&sp_B, sp_A);
+  }
 }
 
 /*
@@ -58,43 +56,41 @@ static void func_B(void)
  *                     [ 0            ]   (saved R14)
  *   sp ------------>  [ 0            ]   (saved R15)
  */
-static void *setup_stack(char *stack_mem, size_t size, void (*func)(void))
-{
-    /*
-     * TODO: Compute the top of the stack, ensure 16-byte alignment,
-     * write the initial register slots and return address, and
-     * return the resulting stack pointer.
-     */
-    (void)stack_mem;
-    (void)size;
-    (void)func;
-    return NULL;
+static void *setup_stack(char *stack_mem, size_t size, void (*func)(void)) {
+  /*
+   * TODO: Compute the top of the stack, ensure 16-byte alignment,
+   * write the initial register slots and return address, and
+   * return the resulting stack pointer.
+   */
+  (void)stack_mem;
+  (void)size;
+  (void)func;
+  return NULL;
 }
 
-int main(void)
-{
-    printf("=== Step 1: Context switch ping-pong ===\n");
+int main(void) {
+  printf("=== Step 1: Context switch ping-pong ===\n");
 
-    sp_A = setup_stack(stack_A, STACK_SIZE, func_A);
-    sp_B = setup_stack(stack_B, STACK_SIZE, func_B);
+  sp_A = setup_stack(stack_A, STACK_SIZE, func_A);
+  sp_B = setup_stack(stack_B, STACK_SIZE, func_B);
 
-    if (!sp_A || !sp_B) {
-        fprintf(stderr, "setup_stack not yet implemented\n");
-        return 1;
-    }
+  if (!sp_A || !sp_B) {
+    fprintf(stderr, "setup_stack not yet implemented\n");
+    return 1;
+  }
 
-    /* Jump into func_A. When it's done, it switches back here. */
-    switch_context(&sp_main, sp_A);
+  /* Jump into func_A. When it's done, it switches back here. */
+  switch_context(&sp_main, sp_A);
 
-    printf("func_A ran %d times\n", counter_A);
-    printf("func_B ran %d times\n", counter_B);
+  printf("func_A ran %d times\n", counter_A);
+  printf("func_B ran %d times\n", counter_B);
 
-    if (counter_A >= ITERATIONS) {
-        printf("PASS: %d iterations completed.\n", ITERATIONS);
-    } else {
-        printf("FAIL: only completed %d iterations.\n", counter_A);
-        return 1;
-    }
+  if (counter_A >= ITERATIONS) {
+    printf("PASS: %d iterations completed.\n", ITERATIONS);
+  } else {
+    printf("FAIL: only completed %d iterations.\n", counter_A);
+    return 1;
+  }
 
-    return 0;
+  return 0;
 }

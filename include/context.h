@@ -7,14 +7,14 @@
  * The single most important function in the entire project.
  * Implemented in src/context_switch.S (not in C).
  *
- * Saves callee-saved registers (RBX, RBP, R12-R15) of the current
- * context onto its stack, stores RSP into *old_sp, loads new_sp
- * into RSP, pops the new context's callee-saved registers, and
- * executes RET (which jumps to whatever address is on top of the
- * new stack).
+ * Saves callee-saved registers (x19–x29, x30/LR) of the current
+ * context onto its stack, stores SP into *old_sp, loads new_sp
+ * into SP, restores the new context's callee-saved registers, and
+ * executes RET (jumps to address restored into x30 from the new
+ * stack).
  *
  * Parameters:
- *   old_sp  -- pointer to where the current RSP should be saved
+ *   old_sp  -- pointer to where the current SP should be saved
  *              (typically &current_tcb->sp)
  *   new_sp  -- the stack pointer to switch to
  *              (typically next_tcb->sp)
