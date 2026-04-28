@@ -16,13 +16,14 @@ switch_context:
     stp x27, x28, [sp, #-16]!
     stp x29, x30, [sp, #-16]!
 
-    // store sp in x0
-    str sp, [x1]
+    // store sp in *old_sp (x0) - SP can't be src in str
+    mov x2, sp
+    str x2, [x0] // transfer x2 register value to x0
 
     // context switch - use
-    mov sp, x1
+    mov sp, x1 // transfer value of register x1 to sp (stack pointer)
 
-    // restore registers - pop from stack
+    // restore registers - pop from stack (LIFO)
     ldp x29, x30, [sp], #16
     ldp x27, x28, [sp], #16
     ldp x25, x26, [sp], #16
