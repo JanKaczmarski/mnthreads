@@ -18,7 +18,6 @@
 static char stack_A[STACK_SIZE] __attribute__((aligned(16)));
 static char stack_B[STACK_SIZE] __attribute__((aligned(16)));
 
-/* Each context saves/restores its RSP here. */
 static void *sp_A = NULL;
 static void *sp_B = NULL;
 static void *sp_main = NULL;
@@ -30,7 +29,7 @@ static void func_A(void) {
   for (;;) {
     counter_A++;
     if (counter_A >= ITERATIONS) {
-      /* Switch back to main to exit cleanly. */
+      // finish ping pong and go back to main
       switch_context(&sp_A, sp_main);
     }
     switch_context(&sp_A, sp_B);
@@ -45,27 +44,38 @@ static void func_B(void) {
 }
 
 /*
- * Helper: set up a stack so that switch_context into it will
- * "return" into func. Mimics the layout expected by the .S file:
+ *  setup stack creates a downwards stack for aarch64 given the stack ptr and size available
+ *  it fills space for 12 8byte registers with 0 and on x30 (top of the stack) it plaes *func
+ *  which is a callback function used by RET instruction.
  *
- *   top of stack -->  [ func address ]   (return address for RET)
- *                     [ 0            ]   (saved RBP)
- *                     [ 0            ]   (saved RBX)
- *                     [ 0            ]   (saved R12)
- *                     [ 0            ]   (saved R13)
- *                     [ 0            ]   (saved R14)
- *   sp ------------>  [ 0            ]   (saved R15)
+ *   top of stack, sp -->  [ 0        ]   (x29)
+ *                     [ func addres  ]   (return addres for RET, x30)
+ *                     [ 0            ]   (saved x27)
+ *                     [ 0            ]
+ *                      .
+ *                      .
+ *                     [ 0            ]   (saved x19)
+ *                     [ 0            ]   (saved x20)
  */
 static void *setup_stack(char *stack_mem, size_t size, void (*func)(void)) {
-  /*
-   * TODO: Compute the top of the stack, ensure 16-byte alignment,
-   * write the initial register slots and return address, and
-   * return the resulting stack pointer.
-   */
-  (void)stack_mem;
-  (void)size;
-  (void)func;
-  return NULL;
+  uintptr_t *sp = (uintptr_t *)(stack_mem + size);
+
+  // ensure 16-bit allignment
+  sp = (uintptr_t *)((uintptr_t)sp & ~0xF);
+
+  // make space for 12 registers x19-x30 - uintptr_t is 32bit for our arch (register size)
+  sp -= 12;
+
+  // zero every "register" value in stack
+  for (int i = 0; i < 12; i++) {
+    sp[i] = 0;
+  }
+
+  // x30 register has RET function. Stack: x29 - x30 - x27 - x28 - ...
+  sp[1] = (uintptr_t)func;
+
+  // sp points to x30 at top of the stack
+  return sp;
 }
 
 int main(void) {
