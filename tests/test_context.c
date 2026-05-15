@@ -43,6 +43,7 @@ static void func_B(void) {
   }
 }
 
+// TODO: We could use context_frame_t in this testcase
 /*
  *  setup stack creates a downwards stack for aarch64 given the stack ptr and size available
  *  it fills space for 12 8byte registers with 0 and on x30 (top of the stack) it plaes *func

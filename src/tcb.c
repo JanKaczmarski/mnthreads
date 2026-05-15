@@ -80,7 +80,7 @@ tcb_t *tcb_create(void (*func)(void))
 
     // setup stack
     tcb->stack_size = MNTHREAD_STACK_SIZE;
-    
+
     // full-descending stack in aarch64
     void *stack_base = mmap(NULL, MNTHREAD_STACK_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (stack_base == (void *) -1) {
@@ -89,24 +89,12 @@ tcb_t *tcb_create(void (*func)(void))
     }
     tcb->stack_base = stack_base;
 
-    // top of the stack
-    char *sp = (char *)stack_base + MNTHREAD_STACK_SIZE;
+    context_frame_t *frame = (context_frame_t *)((char *)stack_base + 
+        MNTHREAD_STACK_SIZE -
+        sizeof(context_frame_t));
+    frame->x30 = (uint64_t)tcb_trampoline;
 
-    // default register values
-    *(--sp) = 0; // x29
-    *(--sp) = 0; // x30 - use trampoline here!
-    *(--sp) = 0; // x27
-    *(--sp) = 0; // x28
-    *(--sp) = 0; // x25
-    *(--sp) = 0; // x26
-    *(--sp) = 0; // x23
-    *(--sp) = 0; // x24
-    *(--sp) = 0; // x21
-    *(--sp) = 0; // x22
-    *(--sp) = 0; // x19
-    *(--sp) = 0; // x20
-
-    tcb->sp = sp;
+    tcb->sp = frame;
 
     // other fields setup
     tcb->state = THREAD_READY;

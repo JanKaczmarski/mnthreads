@@ -2,6 +2,7 @@
 #define MNTHREAD_TCB_H
 
 #include <stddef.h>
+#include <cstdint>
 
 /*
  * tcb.h -- Thread Control Block.
@@ -40,6 +41,22 @@ typedef struct tcb {
     struct tcb     *joiner;      /* Thread blocked in thread_join() on us.
                                     When we finish, re-enqueue the joiner.*/
 } tcb_t;
+
+
+typedef struct contex_frame {
+    uint64_t x29;
+    uint64_t x30;
+    uint64_t x27;
+    uint64_t x28;
+    uint64_t x25;
+    uint64_t x26;
+    uint64_t x23;
+    uint64_t x24;
+    uint64_t x21;
+    uint64_t x22;
+    uint64_t x19;
+    uint64_t x20;
+} context_frame_t;
 
 /*
  * Allocate a new TCB and its stack. Set up the initial stack frame
