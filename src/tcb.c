@@ -1,11 +1,15 @@
-#include "tcb.h"
-#include "context.h"
-#include "scheduler.h"
+#include "../include/tcb.h"
+#include "../include/context.h"
+#include "../include/scheduler.h"
 
+#include <cstddef>
+#include <iterator>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <sys/mman.h>
+#include <sys/types.h>
 
 /* Monotonically increasing thread ID counter. */
 static int next_id = 0;
@@ -72,8 +76,46 @@ tcb_t *tcb_create(void (*func)(void))
      *  6. Return the TCB.
      */
 
-    (void)func;
-    return NULL;
+    tcb_t *tcb = (tcb_t *) malloc(sizeof(tcb_t));
+
+    // setup stack
+    tcb->stack_size = MNTHREAD_STACK_SIZE;
+    
+    // full-descending stack in aarch64
+    void *stack_base = mmap(NULL, MNTHREAD_STACK_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (stack_base == (void *) -1) {
+        perror("mmap allocation failed for new tcb");
+        return NULL;
+    }
+    tcb->stack_base = stack_base;
+
+    // top of the stack
+    char *sp = (char *)stack_base + MNTHREAD_STACK_SIZE;
+
+    // default register values
+    *(--sp) = 0; // x29
+    *(--sp) = 0; // x30 - use trampoline here!
+    *(--sp) = 0; // x27
+    *(--sp) = 0; // x28
+    *(--sp) = 0; // x25
+    *(--sp) = 0; // x26
+    *(--sp) = 0; // x23
+    *(--sp) = 0; // x24
+    *(--sp) = 0; // x21
+    *(--sp) = 0; // x22
+    *(--sp) = 0; // x19
+    *(--sp) = 0; // x20
+
+    tcb->sp = sp;
+
+    // other fields setup
+    tcb->state = THREAD_READY;
+    tcb->id = next_id++;
+    tcb->entry = func;
+    tcb->next = NULL;
+    tcb->joiner = NULL;
+
+    return tcb;
 }
 
 void tcb_destroy(tcb_t *t)
