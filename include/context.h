@@ -1,6 +1,8 @@
 #ifndef MNTHREAD_CONTEXT_H
 #define MNTHREAD_CONTEXT_H
 
+#include <stdint.h>
+
 /*
  * context.h -- Low-level context switch primitive.
  *
@@ -20,5 +22,24 @@
  *              (typically next_tcb->sp)
  */
 void switch_context(void **old_sp, void *new_sp);
+
+/*
+ * context_frame is a struct that represents the layout used by context_switch.
+ * Use this type to avoid errors related with manual stack allocation.
+ */
+typedef struct contex_frame {
+    uint64_t x29;
+    uint64_t x30;
+    uint64_t x27;
+    uint64_t x28;
+    uint64_t x25;
+    uint64_t x26;
+    uint64_t x23;
+    uint64_t x24;
+    uint64_t x21;
+    uint64_t x22;
+    uint64_t x19;
+    uint64_t x20;
+} context_frame_t;
 
 #endif /* MNTHREAD_CONTEXT_H */
