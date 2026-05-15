@@ -74,7 +74,6 @@ tcb_t *tcb_create(void (*func)(void))
 
     tcb_t *tcb = (tcb_t *) malloc(sizeof(tcb_t));
     if (tcb == NULL) {
-        perror("mmaloc for tcb_t failed");
         return NULL;
     }
 
@@ -85,6 +84,7 @@ tcb_t *tcb_create(void (*func)(void))
     void *stack_base = mmap(NULL, MNTHREAD_STACK_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (stack_base == MAP_FAILED) {
         perror("mmap allocation failed for new tcb");
+        free(tcb);
         return NULL;
     }
     tcb->stack_base = stack_base;
