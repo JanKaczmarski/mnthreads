@@ -6,7 +6,7 @@
  * before any TCB or scheduler code exists.
  */
 
-#include "../include/context.h"
+#include "context.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

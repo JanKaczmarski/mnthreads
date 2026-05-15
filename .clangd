@@ -1,0 +1,2 @@
+ComplieFlags:
+  Add: [-Iinclude, -std=c11]

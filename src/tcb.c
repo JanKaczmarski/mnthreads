@@ -1,13 +1,11 @@
-#include "../include/tcb.h"
-#include "../include/context.h"
-#include "../include/scheduler.h"
+#include "tcb.h"
+#include "context.h"
+#include "scheduler.h"
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <stdint.h>
 #include <sys/mman.h>
-#include <sys/types.h>
 
 /* Monotonically increasing thread ID counter. */
 static int next_id = 0;
@@ -75,13 +73,17 @@ tcb_t *tcb_create(void (*func)(void))
      */
 
     tcb_t *tcb = (tcb_t *) malloc(sizeof(tcb_t));
+    if (tcb == NULL) {
+        perror("mmaloc for tcb_t failed");
+        return NULL;
+    }
 
     // setup stack
     tcb->stack_size = MNTHREAD_STACK_SIZE;
 
     // full-descending stack in aarch64
     void *stack_base = mmap(NULL, MNTHREAD_STACK_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (stack_base == (void *) -1) {
+    if (stack_base == MAP_FAILED) {
         perror("mmap allocation failed for new tcb");
         return NULL;
     }
