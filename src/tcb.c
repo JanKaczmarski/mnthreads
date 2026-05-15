@@ -37,7 +37,7 @@ tcb_t *tcb_create(void (*func)(void))
     // and other important metadata about Thread that allows it to be scheduled and descheduled.
     
     /*
-     * TODO:
+     * Steps:
      *  1. Allocate a tcb_t (malloc is fine for the struct itself).
      *  2. Allocate the stack with mmap:
      *       - PROT_READ | PROT_WRITE
@@ -46,21 +46,27 @@ tcb_t *tcb_create(void (*func)(void))
      *         (guard page to catch stack overflow).
      *  3. Compute the stack top:
      *       stack_top = (char *)stack_base + stack_size;
-     *  4. Set up the initial stack frame at the top (growing down):
+     *  4. Reserve a context_frame_t at the top of the stack
+     *     (growing down). AArch64 layout, lowest address first
+     *     (this matches the order that switch_context's ldp will
+     *     pop registers off the stack):
      *
-     *       Slot (offset from top)    Value
-     *       ─────────────────────     ─────────────────────
-     *       -8   (return address)     address of tcb_trampoline
-     *       -16  (saved RBP)          0
-     *       -24  (saved RBX)          0
-     *       -32  (saved R12)          0
-     *       -40  (saved R13)          0
-     *       -48  (saved R14)          0
-     *       -56  (saved R15)          0
+     *       Offset in frame   Register pair
+     *       ───────────────   ──────────────
+     *       +0,  +8           x29 (FP), x30 (LR)  ← lowest addr, popped first
+     *       +16, +24          x27, x28
+     *       +32, +40          x25, x26
+     *       +48, +56          x23, x24
+     *       +64, +72          x21, x22
+     *       +80, +88          x19, x20            ← highest addr, popped last
      *
-     *     The stack pointer in the TCB should point to the R15
-     *     slot (the lowest address), because switch_context will
-     *     pop upward from there.
+     *     Place tcb_trampoline's address in the x30 slot so the
+     *     `ret` at the end of switch_context jumps into it.
+     *
+     *     tcb->sp must point to the start of the frame (the x29
+     *     slot, lowest address) since `ldp` pops upward.
+     *     The frame is 96 bytes (12 × 8), preserving the required
+     *     16-byte SP alignment.
      *
      *  5. Fill in the rest of the TCB fields:
      *       - id = next_id++

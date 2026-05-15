@@ -1,6 +1,6 @@
 # mnthreads — M:N User-Level Threading Library
 
-A from-scratch M:N threading model in C for x86_64 (macOS/Linux). N user-level threads are multiplexed across M kernel threads (pthreads) using a hand-written assembly context switch.
+A from-scratch M:N threading model in C for AArch64 (Linux/macOS). N user-level threads are multiplexed across M kernel threads (pthreads) using a hand-written assembly context switch.
 
 ## Project Structure
 
@@ -15,7 +15,7 @@ include/
   mnthread.h      public API (only header users need)
 
 src/
-  context_switch.S   x86_64 context switch (~15 instructions)
+  context_switch.S   AArch64 context switch (~15 instructions)
   spinlock.c         atomic_flag spinlock
   queue.c            linked-list queue operations
   tcb.c              TCB allocation, stack setup, trampoline
@@ -43,7 +43,7 @@ make test_join       # build + run Step 5
 make clean
 ```
 
-Compiler flags are set to `-g3 -O0 -mno-red-zone -Wall -Wextra`. Do not change `-O0` or `-mno-red-zone` until the project is completely finished — optimizations destroy hand-crafted stack frames, and the red zone will corrupt context switches.
+Compiler flags are set to `-g3 -O0 -Wall -Wextra`. Do not change `-O0` until the project is completely finished — optimizations destroy hand-crafted stack frames. (AArch64 has no red zone in the AAPCS64 ABI, so no `-mno-red-zone` is required, unlike x86_64.)
 
 ASan/UBSan lines are in the Makefile but commented out. They conflict with custom stacks; use `__attribute__((no_sanitize("address")))` on context-switch-adjacent code if you enable them.
 
@@ -53,9 +53,9 @@ Do not proceed to the next step until the current one is completely stable. A su
 
 ### Step 1: Context Switch (the foundation)
 
-Implement `switch_context` in `context_switch.S`. It saves callee-saved registers (RBP, RBX, R12–R15) onto the current stack, stores RSP into `*old_sp`, loads `new_sp` into RSP, pops the new context's registers, and RETs.
+Implement `switch_context` in `context_switch.S`. It saves callee-saved registers (x19–x28, x29/FP, x30/LR) onto the current stack via `stp`, stores SP into `*old_sp`, loads `new_sp` into SP, restores the new context's registers via `ldp`, and `ret`s. On AArch64 `ret` jumps to the address held in x30 (LR), which is why the trampoline address is placed in the x30 slot of the initial frame.
 
-Implement `setup_stack` in `test_context.c`: lay out a fake stack frame (return address + 6 zeroed register slots) so that the first `switch_context` into it boots a C function.
+Implement `setup_stack` in `test_context.c`: lay out a fake stack frame (12 zeroed 8-byte slots for x19–x30, with the function pointer placed in the x30 slot) so that the first `switch_context` into it boots a C function. SP must be 16-byte aligned.
 
 **Pass criteria:** Two functions ping-pong 10,000 times with no crash. Spend as long as needed here — everything else depends on this being bulletproof.
 
@@ -123,7 +123,7 @@ Measure your context switch latency in nanoseconds using `clock_gettime(CLOCK_MO
 - Raw `pthread` context switch (create two pthreads, ping-pong via a mutex+condvar)
 - Go goroutine switch (`runtime.Gosched()` in a loop)
 
-Being able to say "my switch is 45ns vs pthread's 800ns, here's why" demonstrates the right level of systems reasoning. Understand where the difference comes from: your switch saves 6 registers and swaps RSP; a pthread switch goes through the kernel, saves FP/SSE state, and may flush TLB entries.
+Being able to say "my switch is 45ns vs pthread's 800ns, here's why" demonstrates the right level of systems reasoning. Understand where the difference comes from: your switch saves 12 callee-saved GPRs (x19–x30) and swaps SP; a pthread switch goes through the kernel, saves NEON/FP state (q8–q15 callee-saved), and may flush TLB entries.
 
 ### Extension C: Lock-Free SPSC Ring Buffer
 
@@ -134,16 +134,16 @@ A standalone follow-up project (a weekend once Steps 1–5 are done): implement 
 When you hit a segfault, go to GDB/LLDB immediately. Do not add printf statements to triangulate.
 
 ```
-lldb ./test_context_bin
-(lldb) run
-(lldb) register read
-(lldb) memory read -s8 -fx -c16 $rsp
+gdb ./test_context_bin
+(gdb) run
+(gdb) info registers
+(gdb) x/16gx $sp
 ```
 
 ## Prerequisites
 
 - **Read before starting:** OSTEP (ostep.org), Part I (CPU scheduling) and Part II (concurrency).
-- **Read alongside Step 1:** System V AMD64 ABI spec, section 3.2 (register table, stack alignment).
+- **Read alongside Step 1:** AAPCS64 (Procedure Call Standard for the Arm 64-bit Architecture), sections on register usage, callee-saved registers, and stack alignment.
 - **Read alongside Step 4:** Kerrisk's TLPI, chapters on pthreads and signals.
 
 ## Execution Strategy
