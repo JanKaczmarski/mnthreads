@@ -2,8 +2,6 @@
 #include "../include/context.h"
 #include "../include/scheduler.h"
 
-#include <cstddef>
-#include <iterator>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

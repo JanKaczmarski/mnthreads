@@ -27,7 +27,7 @@ void switch_context(void **old_sp, void *new_sp);
  * context_frame is a struct that represents the layout used by context_switch.
  * Use this type to avoid errors related with manual stack allocation.
  */
-typedef struct contex_frame {
+typedef struct context_frame {
     uint64_t x29;
     uint64_t x30;
     uint64_t x27;
