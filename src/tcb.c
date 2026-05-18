@@ -124,6 +124,10 @@ void tcb_destroy(tcb_t *t)
      * IMPORTANT: This must be called AFTER switching off this
      * thread's stack. Never free a stack you're still running on.
      */
+    if (munmap(t->stack_base, t->stack_size) == -1) {
+        perror("munmap failed on tcb");
+        return;
+    }
 
-    (void)t;
+    free(t);
 }
