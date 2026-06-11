@@ -17,13 +17,11 @@ static int next_id = 0;
  */
 void tcb_trampoline(void)
 {
-    /*
-     * TODO:
-     *  1. Get the currently running TCB (scheduler_current()).
-     *  2. Call tcb->entry().
-     *  3. When entry() returns, call scheduler_thread_exit().
-     *     This ensures the thread doesn't RET into garbage.
-     */
+    tcb_t* current = scheduler_current();
+
+    current->entry();
+
+    scheduler_thread_exit();
 }
 
 tcb_t *tcb_create(void (*func)(void))
