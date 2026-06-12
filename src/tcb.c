@@ -124,7 +124,6 @@ void tcb_destroy(tcb_t *t)
      */
     if (munmap(t->stack_base, t->stack_size) == -1) {
         perror("munmap failed on tcb");
-        return;
     }
 
     free(t);
