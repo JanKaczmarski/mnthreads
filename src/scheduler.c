@@ -1,4 +1,5 @@
 #include "scheduler.h"
+#include "scheduler_struct.h"
 #include "tcb.h"
 #include "context.h"
 #include "spinlock.h"
@@ -6,86 +7,58 @@
 
 #include <stddef.h>
 #include <stdio.h>
-
-/* ---------------------------------------------------------------
- * Global scheduler state
- * --------------------------------------------------------------- */
-
-/* The shared ready queue. */
-static thread_queue_t ready_queue;
-
-/* Protects ready_queue in M:N mode (Step 4+). */
-static spinlock_t     queue_lock;
-
-/*
- * Thread-local pointer to the TCB currently running on this
- * kernel thread / worker. In Step 3 (single-threaded), this
- * is just a global.
- */
-static __thread tcb_t *current_tcb = NULL;
-
-/*
- * Number of active workers. 0 means cooperative mode (Step 3).
- */
-static int num_workers_active = 0;
+#include <stdlib.h>
 
 /* ---------------------------------------------------------------
  * Lifecycle
  * --------------------------------------------------------------- */
 
-void scheduler_init(void)
+scheduler_t *scheduler_create(void)
 {
-    queue_init(&ready_queue);
-    spinlock_init(&queue_lock);
-    current_tcb = NULL;
+    struct scheduler *s = malloc(sizeof(struct scheduler));
+    if (s == NULL) return NULL;
+
+    queue_init(&s->ready_queue);
+    spinlock_init(&s->queue_lock);
+    s->current_tcb = NULL;
+    s->num_workers_active = 0; // default for Stage 3 (1 kernel worker)
+    
+    return s;
 }
 
-void scheduler_shutdown(void)
+void scheduler_destroy(scheduler_t *s)
 {
     /*
-     * TODO:
-     *  1. If workers are active, call workers_stop().  - after Step 3
-     *  2. Drain any remaining TCBs from the ready queue
-     *     and call tcb_destroy on each.
-     *  3. Any other global cleanup.
+     * TODO: If workers are active, call workers_stop().  - after Step 3
+     * After Step 3 (multiple workers) add a spinlock
      */
     // workers_stop();
 
-    spinlock_lock(&queue_lock);
-
-    while (!queue_empty(&ready_queue)) {
-        tcb_t* tcb = queue_pop(&ready_queue);
+    while (!queue_empty(&s->ready_queue)) {
+        tcb_t* tcb = queue_pop(&s->ready_queue);
         tcb_destroy(tcb);
     }
 
-    spinlock_unlock(&queue_lock);
+    free(s);
 }
 
 /* ---------------------------------------------------------------
  * Queue operations
  * --------------------------------------------------------------- */
 
-void scheduler_enqueue(tcb_t *t)
+void scheduler_enqueue(scheduler_t *s, tcb_t *t)
 {
-    spinlock_lock(&queue_lock);
-
     t->state = THREAD_READY;
-    queue_push(&ready_queue, t);
-
-    spinlock_unlock(&queue_lock);
+    queue_push(&s->ready_queue, t);
 }
 
-tcb_t *scheduler_dequeue(void)
+tcb_t *scheduler_dequeue(scheduler_t *s)
 {
-    spinlock_lock(&queue_lock);
-
-    tcb_t *t = queue_pop(&ready_queue);
+    tcb_t *t = queue_pop(&s->ready_queue);
     if (t != NULL) {
         t->state = THREAD_RUNNING;
     }
-    scheduler_set_current(t);
-
-    spinlock_unlock(&queue_lock);
+    s->current_tcb = t;
 
     return t;
 }
@@ -94,21 +67,16 @@ tcb_t *scheduler_dequeue(void)
  * Current-thread tracking
  * --------------------------------------------------------------- */
 
-tcb_t *scheduler_current(void)
+tcb_t *scheduler_current(scheduler_t *s)
 {
-    return current_tcb;
-}
-
-void scheduler_set_current(tcb_t *t)
-{
-    current_tcb = t;
+    return s->current_tcb;
 }
 
 /* ---------------------------------------------------------------
  * Scheduling actions
  * --------------------------------------------------------------- */
 
-void scheduler_yield(void)
+void scheduler_yield(scheduler_t *s)
 {
     /*
      * TODO (Step 4 -- M:N with workers):
@@ -131,17 +99,17 @@ void scheduler_yield(void)
      */
 
 
-    tcb_t *prev = current_tcb;
-    scheduler_enqueue(prev);
+    tcb_t *prev = s->current_tcb;
+    scheduler_enqueue(s, prev);
 
     // TODO: what to switch to if next == NULL?
-    tcb_t *next = scheduler_dequeue();
-    current_tcb = next;
+    tcb_t *next = scheduler_dequeue(s);
+    s->current_tcb = next;
 
     switch_context(&prev->sp, next->sp);
 }
 
-void scheduler_thread_exit(void)
+void scheduler_thread_exit(scheduler_t *s)
 {
     /*
      * TODO:
@@ -161,26 +129,30 @@ void scheduler_thread_exit(void)
      * on self's stack. Freeing it now is undefined behavior.
      */
 
-    tcb_t *self = current_tcb;
+    tcb_t *self = s->current_tcb;
     if (self == NULL) {
         return;
     }
     
     self->state = THREAD_FINISHED;
     if (self->joiner != NULL) {
-        scheduler_enqueue(self->joiner);
+        scheduler_enqueue(s, self->joiner);
     }
 
-    tcb_t *next = scheduler_dequeue();
+    tcb_t *next = scheduler_dequeue(s);
     if (next == NULL) {
-        next = NULL; // TODO: switch to scheduler context here
+        // TODO: switch to scheduler context here
+        // for now this is a fatal condition
+        next = NULL;
+        fprintf(stderr, "scheduler_thread_exit: no next thread and no scheduler context\n");
+        abort();
     }
-    current_tcb = next;
+    s->current_tcb = next;
 
     switch_context(&self->sp, next->sp); // TODO: why not tcb destroy after context switch?
 }
 
-void scheduler_join(tcb_t *target)
+void scheduler_join(scheduler_t *s, tcb_t *target)
 {
     /*
      * TODO (Step 5):

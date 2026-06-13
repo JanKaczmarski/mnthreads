@@ -3,7 +3,6 @@
 
 #include "tcb.h"
 #include "queue.h"
-#include "spinlock.h"
 
 /*
  * scheduler.h -- Core scheduler state and operations.
@@ -15,6 +14,8 @@
  * Step 4 (M:N): Multiple Workers, spinlock protects the queue.
  */
 
+typedef struct scheduler scheduler_t;
+
 /* ---------------------------------------------------------------
  * Scheduler lifecycle
  * --------------------------------------------------------------- */
@@ -23,13 +24,13 @@
  * Initialize the scheduler. Call once at startup before creating
  * any threads.
  */
-void scheduler_init(void);
+scheduler_t *scheduler_create(void);
 
 /*
  * Shut down the scheduler. Waits for all Workers to drain the
  * queue and exit. Call once at teardown.
  */
-void scheduler_shutdown(void);
+void scheduler_destroy(scheduler_t *s);
 
 /* ---------------------------------------------------------------
  * Queue operations (lock-aware)
@@ -39,14 +40,14 @@ void scheduler_shutdown(void);
  * Add a READY thread to the back of the global ready queue.
  * Acquires the spinlock internally in M:N mode.
  */
-void scheduler_enqueue(tcb_t *t);
+void scheduler_enqueue(scheduler_t *s, tcb_t *t);
 
 /*
  * Remove and return the next READY thread from the front of the
  * queue. Returns NULL if the queue is empty.
  * Acquires the spinlock internally in M:N mode.
  */
-tcb_t *scheduler_dequeue(void);
+tcb_t *scheduler_dequeue(scheduler_t *s);
 
 /* ---------------------------------------------------------------
  * Current-thread tracking
@@ -56,12 +57,7 @@ tcb_t *scheduler_dequeue(void);
  * Get the TCB of the thread currently running on this Worker
  * (uses thread-local storage in M:N mode).
  */
-tcb_t *scheduler_current(void);
-
-/*
- * Set the current-thread pointer for this Worker.
- */
-void scheduler_set_current(tcb_t *t);
+tcb_t *scheduler_current(scheduler_t *s);
 
 /* ---------------------------------------------------------------
  * Scheduling actions (called by user threads)
@@ -75,7 +71,7 @@ void scheduler_set_current(tcb_t *t);
  * Step 4: switches back to the Worker loop, which then picks
  *         the next thread from the queue.
  */
-void scheduler_yield(void);
+void scheduler_yield(scheduler_t *s);
 
 /*
  * Terminate the current thread. Marks it FINISHED, wakes its
@@ -83,13 +79,13 @@ void scheduler_yield(void);
  * are freed by the scheduler/worker after the switch, not by
  * the thread itself (since it's still on its own stack).
  */
-void scheduler_thread_exit(void);
+void scheduler_thread_exit(scheduler_t *s);
 
 /*
  * Block the calling thread until target finishes. If target is
  * already FINISHED, returns immediately. Otherwise, the caller
  * is moved to BLOCKED state and recorded as target->joiner.
  */
-void scheduler_join(tcb_t *target);
+void scheduler_join(scheduler_t *s, tcb_t *target);
 
 #endif /* MNTHREAD_SCHEDULER_H */

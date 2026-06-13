@@ -15,7 +15,7 @@ AS      = cc
 # -O0:           Mandatory. Optimizations destroy hand-crafted stacks.
 # -g3:           Maximum debug info for GDB/LLDB.
 # -Wall -Wextra: Catch common mistakes early.
-CFLAGS  = -g3 -O0 -Wall -Wextra -Iinclude
+CFLAGS  = -g3 -O0 -Wall -Wextra -Iinclude -Isrc
 ASFLAGS = -g3
 
 # Uncomment to enable sanitizers (may conflict with custom stacks;
