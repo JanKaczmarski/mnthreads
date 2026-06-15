@@ -15,7 +15,7 @@ AS      = cc
 # -O0:           Mandatory. Optimizations destroy hand-crafted stacks.
 # -g3:           Maximum debug info for GDB/LLDB.
 # -Wall -Wextra: Catch common mistakes early.
-CFLAGS  = -g3 -O0 -Wall -Wextra -Iinclude -Isrc
+CFLAGS  = -g3 -O0 -Wall -Wextra -Iinclude -Isrc -Itests/include
 ASFLAGS = -g3
 
 # Uncomment to enable sanitizers (may conflict with custom stacks;
@@ -44,7 +44,7 @@ LIB_OBJS = $(LIB_SRCS:.c=.o) $(ASM_SRCS:.S=.o)
 # Build rules
 # ---------------------------------------------------------------
 
-all: test_context_bin test_create_bin test_coop_bin test_mn_bin test_join_bin
+all: test_context_bin test_create_bin test_coop_bin test_mn_bin test_join_bin test_scheduler_bin
 
 # Assembly
 src/context_switch.o: src/context_switch.S
@@ -73,6 +73,9 @@ test_mn_bin: tests/test_mn.o $(LIB_OBJS)
 test_join_bin: tests/test_join.o $(LIB_OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
+test_scheduler_bin: tests/test_scheduler.o $(LIB_OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
 # ---------------------------------------------------------------
 # Run targets (build + execute)
 # ---------------------------------------------------------------
@@ -92,12 +95,15 @@ test_mn: test_mn_bin
 test_join: test_join_bin
 	./test_join_bin
 
+test_scheduler: test_scheduler_bin
+	./test_scheduler_bin
+
 # ---------------------------------------------------------------
 # Cleanup
 # ---------------------------------------------------------------
 
 clean:
 	rm -f src/*.o tests/*.o
-	rm -f test_context_bin test_create_bin test_coop_bin test_mn_bin test_join_bin
+	rm -f test_context_bin test_create_bin test_coop_bin test_mn_bin test_join_bin test_scheduler_bin
 
-.PHONY: all clean test_context test_create test_coop test_mn test_join
+.PHONY: all clean test_context test_create test_coop test_mn test_join test_scheduler
