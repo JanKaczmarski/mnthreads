@@ -18,4 +18,11 @@ static inline tcb_t *scheduler_get_current(scheduler_t *s) {
   return s->current_tcb;
 }
 
+/*
+ * Resets the package-wide default scheduler to NULL.
+ * FOR TESTING ONLY — allows tests to set a fresh default per test case
+ * without triggering the double-init assert in scheduler_set_default().
+ */
+void scheduler_reset_default(void);
+
 #endif

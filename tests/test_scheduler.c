@@ -2,110 +2,60 @@
 #include "scheduler_internal.h"
 #include "scheduler_struct.h"
 #include "tcb.h"
+#include "test_helpers.h"
 
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 
-// scheduler_create
 int test_scheduler_create(void) {
-  char *test_func_name = "test_scheduler_create";
-
   scheduler_t *s = scheduler_create();
 
-  if (s == NULL) {
-    fprintf(stderr, "%s: scheduler create cannot be NULL\n", test_func_name);
-    return 0;
-  }
-
-  if (s->current_tcb != NULL) {
-    // TODO: How to give here a verbose error?
-    fprintf(stderr, "%s: current_tcb should be equal to NULL, %lu\n", test_func_name, (uintptr_t) s->current_tcb);
-    scheduler_destroy(s);
-    return 0;
-  }
-
-  if (s->num_workers_active < 0) {
-    fprintf(stderr, "%s: num_workers_active cannot be negative, %d\n", test_func_name, s->num_workers_active);
-    scheduler_destroy(s);
-    return 0;
-  }
+  TEST_ASSERT(s != NULL, "scheduler_create returned NULL");
+  TEST_ASSERT(s->current_tcb == NULL, "current_tcb should be NULL on init");
+  TEST_ASSERT(s->num_workers_active == 0, "num_workers_active should be 0 on init");
 
   scheduler_destroy(s);
   return 1;
 }
 
-// scheduler enqueue
-// TODO: Maybe we can use a shared scheduler here to avoid malloc and free
 int test_scheduler_enqueue(void) {
-  char *test_func_name = "test_scheduler_enqueue";
-
   scheduler_t *s = scheduler_create();
   tcb_t *t = tcb_create(NULL);
 
-  if (s == NULL) {
-    fprintf(stderr, "%s: scheduler_create shouldn't create a NULL scheduler\n", test_func_name);
-    return 0;
-  }
+  TEST_ASSERT(s != NULL, "scheduler_create returned NULL");
 
   scheduler_enqueue(s, t);
 
-  int got_queue_size = scheduler_queue_size(s);
-  int want_queue_size = 1;
-
-  if (got_queue_size != want_queue_size) {
-    fprintf(stderr, "%s: scheduler_enqueue_s should add exactly %d tcb to queue, but the length of queue is `%d`\n", test_func_name, want_queue_size, got_queue_size);
-    scheduler_destroy(s);
-    return 0;
-  }
+  TEST_ASSERT(scheduler_queue_size(s) == 1, "queue size should be 1 after enqueue");
 
   scheduler_destroy(s);
   return 1;
 }
 
 int test_scheduler_dequeue(void) {
-  char *test_func_name = "test_scheduler_dequeue";
-
   scheduler_t *s = scheduler_create();
   tcb_t *t = tcb_create(NULL);
 
-  if (s == NULL) {
-    fprintf(stderr, "%s: scheduler_create shouldn't create a NULL scheduler\n", test_func_name);
-    tcb_destroy(t);
-    return 0;
-  }
+  TEST_ASSERT(s != NULL, "scheduler_create returned NULL");
 
   // dequeue on empty queue
   tcb_t *got_tcb = scheduler_dequeue(s);
-  if (got_tcb != NULL) {
-    fprintf(stderr, "%s: scheduler_dequeue on empty scheduler should return NULL tcb\n", test_func_name);
-    scheduler_destroy(s);
-    return 0;
-  }
+  TEST_ASSERT(got_tcb == NULL, "dequeue on empty queue should return NULL");
 
   // dequeue on non-empty queue
-  scheduler_enqueue(s, t); // assuming enqueue works properly
+  scheduler_enqueue(s, t);
 
   got_tcb = scheduler_dequeue(s);
-  if (got_tcb != t) {
-    fprintf(stderr, "%s: expected address `%lu` for enqueued tcb, but got %lu\n", test_func_name, (uintptr_t)t, (uintptr_t)got_tcb);
-    scheduler_destroy(s);
-    return 0;
-  }
+  TEST_ASSERT(got_tcb == t, "dequeue should return the enqueued tcb");
+  TEST_ASSERT(s->current_tcb == t, "current_tcb should be set to dequeued tcb");
 
-  if (s->current_tcb != t) {
-    fprintf(stderr, "%s: current_tcb on scheduler should be set to dequeued tcb. got `%lu`, want `%lu`\n", test_func_name, (uintptr_t)s->current_tcb, (uintptr_t)t);
-    scheduler_destroy(s);
-    return 0;
-  }
-
+  tcb_destroy(t);
   scheduler_destroy(s);
-
   return 1;
 }
 
-// Global allowing to return from `switch_context` in child funciton to test Stack Pointer
-// which "yielded". Used for scheduler_yield_s tests
+// Global allowing to return from `switch_context` in child function to test
+// the stack pointer which "yielded". Used for test_scheduler_yield.
 static scheduler_t *t_sched_yield = NULL;
 
 static void yield_thread(void) {
@@ -113,78 +63,69 @@ static void yield_thread(void) {
 }
 
 int test_scheduler_yield(void) {
-  char *test_func_name = "test_scheduler_yield";
-
   scheduler_t *s = scheduler_create();
+  scheduler_set_default(s); // required — tcb_trampoline calls scheduler_default()
   t_sched_yield = s;
 
-  tcb_t main = {0};
-  s->current_tcb = &main;
+  tcb_t main_stub = {0};
+  s->current_tcb = &main_stub;
   tcb_t *t = tcb_create(yield_thread);
-  
   scheduler_enqueue(s, t);
 
   scheduler_yield(s);
-  int got_queue_size = scheduler_queue_size(s);
-  int want_queue_size = 1;
-  if (got_queue_size != want_queue_size) {
-    fprintf(stderr, "%s: queue size after scheduler yield is incorrect. got `%d` want `%d`\n", test_func_name, got_queue_size, want_queue_size);
-    scheduler_destroy(s);
-    return 0;
-  }
 
-  tcb_t *got_queue_head = s->ready_queue.head;
-  if (got_queue_head != t) { // scheduler_yield was called 2 times (1 time via yield_thread entrypoint)
-    fprintf(stderr, "%s: queue head incorrect. got `%lu` want `%lu`", test_func_name, (uintptr_t)got_queue_head, (uintptr_t)t);
-    scheduler_destroy(s);
-    return 0;
-  }
+  // After full yield round-trip:
+  //   1st yield: enqueues main_stub, dequeues t, switches to yield_thread
+  //   yield_thread: enqueues t, dequeues main_stub, switches back here
+  // Result: current_tcb = &main_stub, queue = [t]
+  TEST_ASSERT(scheduler_queue_size(s) == 1, "queue size should be 1 after yield round-trip");
+  TEST_ASSERT(s->ready_queue.head == t, "queue head should be t after yield round-trip");
 
   t_sched_yield = NULL;
+  scheduler_reset_default();
   scheduler_destroy(s);
-
   return 1;
 }
 
-// TODO: Add test case for scheduler_thread_exit_s
+// TODO: implement test_scheduler_thread_exit
 int test_scheduler_thread_exit(void) {
-  fprintf(stderr, "test_scheduler_thread_exit: UNIMPLEMENTED\n");
+  fprintf(stderr, "%s:%d: test_scheduler_thread_exit: UNIMPLEMENTED\n", __FILE__, __LINE__);
   return 1;
 }
-
 
 int main(void) {
   char *log_pref = "[main]";
 
   printf("%s: Starting test for `test_scheduler_create`\n", log_pref);
   if (test_scheduler_create() == 0) {
-    printf("%s: Test for `test_scheduler_create` failed\n", log_pref);
-    return 0;
+    printf("%s: FAILED test_scheduler_create\n", log_pref);
+    return 1;
   }
 
   printf("%s: Starting test for `test_scheduler_enqueue`\n", log_pref);
   if (test_scheduler_enqueue() == 0) {
-    printf("%s: Test for `test_scheduler_enqueue` failed\n", log_pref);
-    return 0;
+    printf("%s: FAILED test_scheduler_enqueue\n", log_pref);
+    return 1;
   }
 
   printf("%s: Starting test for `test_scheduler_dequeue`\n", log_pref);
   if (test_scheduler_dequeue() == 0) {
-    printf("%s: Test for `test_scheduler_dequeue` failed\n", log_pref);
-    return 0;
+    printf("%s: FAILED test_scheduler_dequeue\n", log_pref);
+    return 1;
   }
 
   printf("%s: Starting test for `test_scheduler_yield`\n", log_pref);
   if (test_scheduler_yield() == 0) {
-    printf("%s: Test for `test_scheduler_yield` failed\n", log_pref);
-    return 0;
+    printf("%s: FAILED test_scheduler_yield\n", log_pref);
+    return 1;
   }
 
   printf("%s: Starting test for `test_scheduler_thread_exit`\n", log_pref);
   if (test_scheduler_thread_exit() == 0) {
-    printf("%s: Test for `test_scheduler_thread_exit` failed\n", log_pref);
-    return 0;
+    printf("%s: FAILED test_scheduler_thread_exit\n", log_pref);
+    return 1;
   }
+
+  printf("%s: all tests passed\n", log_pref);
+  return 0;
 }
-
-

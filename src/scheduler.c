@@ -28,6 +28,10 @@ void scheduler_set_default(scheduler_t *s) {
     default_scheduler = s;
 }
 
+void scheduler_reset_default(void) {
+    default_scheduler = NULL;
+}
+
 scheduler_t *scheduler_create(void)
 {
     struct scheduler *s = malloc(sizeof(struct scheduler));
