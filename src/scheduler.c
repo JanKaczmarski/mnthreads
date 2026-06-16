@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "queue.h"
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,13 +17,15 @@ static scheduler_t *default_scheduler = NULL;
  * Lifecycle
  * --------------------------------------------------------------- */
 
-void scheduler_init(void) {
-    default_scheduler = scheduler_create();
-} 
+scheduler_t *scheduler_default(void) {
+    assert(default_scheduler != NULL && "scheduler_default called with default scheduler being NULL (not set)");
+    return default_scheduler;
+}
 
-void scheduler_shutdown(void) {
-    scheduler_destroy(default_scheduler);
-    default_scheduler = NULL;
+void scheduler_set_default(scheduler_t *s) {
+    assert(s != NULL && "cannot set NULL as default scheduler");
+    assert(default_scheduler == NULL && "default scheduler already initialized");
+    default_scheduler = s;
 }
 
 scheduler_t *scheduler_create(void)
@@ -58,17 +61,13 @@ void scheduler_destroy(scheduler_t *s)
  * Queue operations
  * --------------------------------------------------------------- */
 
-void scheduler_enqueue_s(scheduler_t *s, tcb_t *t)
+void scheduler_enqueue(scheduler_t *s, tcb_t *t)
 {
     t->state = THREAD_READY;
     queue_push(&s->ready_queue, t);
 }
 
-void scheduler_enqueue(tcb_t *t) {
-    scheduler_enqueue_s(default_scheduler, t);
-}
-
-tcb_t *scheduler_dequeue_s(scheduler_t *s)
+tcb_t *scheduler_dequeue(scheduler_t *s)
 {
     tcb_t *t = queue_pop(&s->ready_queue);
     if (t != NULL) {
@@ -79,28 +78,20 @@ tcb_t *scheduler_dequeue_s(scheduler_t *s)
     return t;
 }
 
-tcb_t *scheduler_dequeue(void) {
-    return scheduler_dequeue_s(default_scheduler);
-}
-
 /* ---------------------------------------------------------------
  * Current-thread tracking
  * --------------------------------------------------------------- */
 
-tcb_t *scheduler_current_s(scheduler_t *s)
+tcb_t *scheduler_current(scheduler_t *s)
 {
     return s->current_tcb;
-}
-
-tcb_t *scheduler_current(void) {
-    return scheduler_current_s(default_scheduler);
 }
 
 /* ---------------------------------------------------------------
  * Scheduling actions
  * --------------------------------------------------------------- */
 
-void scheduler_yield_s(scheduler_t *s)
+void scheduler_yield(scheduler_t *s)
 {
     /*
      * TODO (Step 4 -- M:N with workers):
@@ -124,20 +115,16 @@ void scheduler_yield_s(scheduler_t *s)
 
 
     tcb_t *prev = s->current_tcb;
-    scheduler_enqueue_s(s, prev);
+    scheduler_enqueue(s, prev);
 
     // TODO: what to switch to if next == NULL?
-    tcb_t *next = scheduler_dequeue_s(s);
+    tcb_t *next = scheduler_dequeue(s);
     s->current_tcb = next;
 
     switch_context(&prev->sp, next->sp);
 }
 
-void scheduler_yield(void) {
-    scheduler_yield_s(default_scheduler);
-}
-
-void scheduler_thread_exit_s(scheduler_t *s)
+void scheduler_thread_exit(scheduler_t *s)
 {
     /*
      * TODO:
@@ -155,10 +142,10 @@ void scheduler_thread_exit_s(scheduler_t *s)
     
     self->state = THREAD_FINISHED;
     if (self->joiner != NULL) {
-        scheduler_enqueue_s(s, self->joiner);
+        scheduler_enqueue(s, self->joiner);
     }
 
-    tcb_t *next = scheduler_dequeue_s(s);
+    tcb_t *next = scheduler_dequeue(s);
     if (next == NULL) {
         // TODO: switch to scheduler context here
         // for now this is a fatal condition
@@ -171,11 +158,8 @@ void scheduler_thread_exit_s(scheduler_t *s)
     switch_context(&self->sp, next->sp); // TODO: why not tcb destroy after context switch?
 }
 
-void scheduler_thread_exit(void) {
-    scheduler_thread_exit_s(default_scheduler);
-}
 
-void scheduler_join_s(scheduler_t *s, tcb_t *target)
+void scheduler_join(scheduler_t *s, tcb_t *target)
 {
     /*
      * TODO (Step 5):
@@ -194,8 +178,4 @@ void scheduler_join_s(scheduler_t *s, tcb_t *target)
      * step 3. Use a lock or atomic state check to handle this.
      */
     (void)target;
-}
-
-void scheduler_join(tcb_t *target) {
-    scheduler_join_s(default_scheduler, target);
 }
