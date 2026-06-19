@@ -10,6 +10,7 @@ struct scheduler {
     spinlock_t queue_lock;
     tcb_t *current_tcb;
     int num_workers_active;
+    void *scheduler_sp; // saved SP of the caller context (set by scheduler_run)
 };
 
 #endif

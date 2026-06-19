@@ -46,6 +46,9 @@ scheduler_t *scheduler_create(void);
  */
 void scheduler_destroy(scheduler_t *s);
 
+// Switch into the first ready thread; returns when all threads have exited.
+void scheduler_run(scheduler_t *s);
+
 /* ---------------------------------------------------------------
  * Queue operations (lock-aware)
  * --------------------------------------------------------------- */

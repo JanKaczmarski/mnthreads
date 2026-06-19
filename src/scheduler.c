@@ -92,38 +92,33 @@ tcb_t *scheduler_current(scheduler_t *s)
 }
 
 /* ---------------------------------------------------------------
+ * Internal helpers
+ * --------------------------------------------------------------- */
+
+static void switch_to_scheduler(scheduler_t *s, tcb_t *from)
+{
+    s->current_tcb = NULL;
+    switch_context(&from->sp, s->scheduler_sp);
+}
+
+/* ---------------------------------------------------------------
  * Scheduling actions
  * --------------------------------------------------------------- */
 
 void scheduler_yield(scheduler_t *s)
 {
     /*
-     * TODO (Step 4 -- M:N with workers):
-     *  1. tcb_t *self = current_tcb
-     *  2. scheduler_enqueue(self)  // put back in queue
-     *  3. current_tcb = NULL
-     *  4. worker_t *w = worker_self()
-     *  5. switch_context(&self->sp, w->sp)
-     *     // Returns into the worker loop, which will dequeue
-     *     // the next thread.
-     *
-     * CRITICAL (Step 4): The yield race condition.
-     *   Between enqueue and switch_context, another Worker could
-     *   dequeue this TCB and start running it while WE are still
-     *   on its stack finishing the switch. Solutions:
-     *     a) Hold the queue lock across enqueue + switch_context.
-     *     b) Use a TCB state machine: RUNNING -> YIELDING -> READY
-     *        with careful atomic transitions.
-     *   Choose one and implement it; do not leave this unhandled.
+     * TODO (Step 4): switch back to worker context instead of
+     * picking next thread directly. Mind the yield race condition:
+     * use RUNNING->YIELDING->READY state transition or hold the
+     * queue lock across enqueue + switch_context.
      */
-
 
     tcb_t *prev = s->current_tcb;
     scheduler_enqueue(s, prev);
 
-    // TODO: what to switch to if next == NULL?
     tcb_t *next = scheduler_dequeue(s);
-    s->current_tcb = next;
+    if (next == prev) return; // only thread in queue, nothing to switch to
 
     switch_context(&prev->sp, next->sp);
 }
@@ -151,17 +146,21 @@ void scheduler_thread_exit(scheduler_t *s)
 
     tcb_t *next = scheduler_dequeue(s);
     if (next == NULL) {
-        // TODO: switch to scheduler context here
-        // for now this is a fatal condition
-        next = NULL;
-        fprintf(stderr, "scheduler_thread_exit: no next thread and no scheduler context\n");
-        abort();
+        switch_to_scheduler(s, self);
+        return;
     }
-    s->current_tcb = next;
 
-    switch_context(&self->sp, next->sp); // TODO: why not tcb destroy after context switch?
+    switch_context(&self->sp, next->sp);
 }
 
+
+void scheduler_run(scheduler_t *s)
+{
+    tcb_t *first = scheduler_dequeue(s);
+    if (first == NULL) return;
+
+    switch_context(&s->scheduler_sp, first->sp);
+}
 
 void scheduler_join(scheduler_t *s, tcb_t *target)
 {
