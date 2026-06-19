@@ -143,7 +143,7 @@ void scheduler_thread_exit(scheduler_t *s)
     if (self == NULL) {
         return;
     }
-    
+
     self->state = THREAD_FINISHED;
     if (self->joiner != NULL) {
         scheduler_enqueue(s, self->joiner);

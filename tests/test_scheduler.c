@@ -87,9 +87,45 @@ int test_scheduler_yield(void) {
   return 1;
 }
 
+// switch_context will start with this thread function
+// and scheduler
+static scheduler_t *t_sched_thread_exit = NULL;
+
+static void exit_thread(void) {
+  scheduler_yield(t_sched_thread_exit);
+}
+
 // TODO: implement test_scheduler_thread_exit
 int test_scheduler_thread_exit(void) {
-  fprintf(stderr, "%s:%d: test_scheduler_thread_exit: UNIMPLEMENTED\n", __FILE__, __LINE__);
+
+
+  scheduler_t *s = scheduler_create();
+  scheduler_set_default(s);
+  t_sched_thread_exit = s;
+
+  // --- With current_tcb not being set ---
+  scheduler_thread_exit(s);
+
+  TEST_ASSERT(s->current_tcb == NULL, "current_tcb shouldn't change with schduler_thread_exit on empty scheduler");
+  TEST_ASSERT(s->ready_queue.size == 0, "ready_queue should be empty on scheduler_thread_exit on empty scheduler");
+
+  // --- With current_tcb being set ---
+  tcb_t main_stub = {0};
+  s->current_tcb = &main_stub;
+  tcb_t *t = tcb_create(exit_thread);
+  main_stub.joiner = t;
+
+  scheduler_thread_exit(s);
+
+  TEST_ASSERT(main_stub.state == THREAD_FINISHED, "scheduler_thread_exit should mark former current_tcb as THREAD_FINISHED");
+  TEST_ASSERT(main_stub.joiner == t, "former current_thread joiner should remain unchanged");
+
+  TEST_ASSERT(s->ready_queue.tail == main_stub.joiner, "former current_tcb joiner thread should be placed at the end of ready queue");
+  TEST_ASSERT(s->ready_queue.size == 0, "after scheduler_thread_exit ready queue size should be 0");
+  TEST_ASSERT(s->current_tcb == t, "former current_thread joiner should be the new current_tcb");
+
+  scheduler_reset_default();
+  scheduler_destroy(s);
   return 1;
 }
 
