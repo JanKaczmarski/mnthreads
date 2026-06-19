@@ -21,6 +21,20 @@ typedef struct scheduler scheduler_t;
  * --------------------------------------------------------------- */
 
 /*
+ * Retruns a default scheduler. If scheduler is set to NULL the assert will fail
+ * and the abort() will be called.
+ */
+scheduler_t *scheduler_default(void);
+
+/*
+ * Sets a scheduler as a package wide default. The scheduler can be retrieved by calling
+ * scheduler_t *scheduler_default(void) function.
+ *
+ * if s == NULL the assert will fail and abort() will be called.
+ */
+void scheduler_set_default(scheduler_t *s);
+
+/*
  * Initialize the scheduler. Call once at startup before creating
  * any threads.
  */
@@ -31,6 +45,9 @@ scheduler_t *scheduler_create(void);
  * queue and exit. Call once at teardown.
  */
 void scheduler_destroy(scheduler_t *s);
+
+// Switch into the first ready thread; returns when all threads have exited.
+void scheduler_run(scheduler_t *s);
 
 /* ---------------------------------------------------------------
  * Queue operations (lock-aware)
@@ -58,6 +75,7 @@ tcb_t *scheduler_dequeue(scheduler_t *s);
  * (uses thread-local storage in M:N mode).
  */
 tcb_t *scheduler_current(scheduler_t *s);
+
 
 /* ---------------------------------------------------------------
  * Scheduling actions (called by user threads)

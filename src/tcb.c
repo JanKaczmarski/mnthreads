@@ -17,11 +17,13 @@ static int next_id = 0;
  */
 void tcb_trampoline(void)
 {
-    tcb_t* current = scheduler_current();
+    scheduler_t *default_scheduler = scheduler_default();
+
+    tcb_t* current = scheduler_current(default_scheduler);
 
     current->entry();
 
-    scheduler_thread_exit();
+    scheduler_thread_exit(default_scheduler);
 }
 
 tcb_t *tcb_create(void (*func)(void))
